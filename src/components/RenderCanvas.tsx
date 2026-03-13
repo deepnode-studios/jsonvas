@@ -240,6 +240,12 @@ export function RenderCanvas() {
                       theme={theme}
                       assets={assets}
                       size={size}
+                      activeElementId={slide.id === activeSlideId ? activeElementId : null}
+                      onElementClick={(id) => {
+                        setActiveSlide(slide.id);
+                        setActiveElement(id);
+                      }}
+                      onBackgroundClick={() => setActiveElement(null)}
                     />
                   </div>
                 </div>

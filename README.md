@@ -100,7 +100,7 @@ Jsonvas is in active development. The first domain — **Social Media Carousels*
 ## Getting Started
 
 ```bash
-git clone https://github.com/user/jsonvas.git
+git clone https://github.com/deepnode-studios/jsonvas.git
 cd jsonvas
 npm install
 npm run dev
@@ -138,7 +138,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Jsonvas is community-driven. Whether you're refining the schema, building new element types, or improving the rendering engine — contributions are welcome.
 
-See [open issues](https://github.com/user/jsonvas/issues) or start a discussion.
+See [open issues](https://github.com/deepnode-studios/jsonvas/issues) or start a discussion.
 
 ---
 

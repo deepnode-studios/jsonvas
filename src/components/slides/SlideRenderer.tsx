@@ -163,9 +163,10 @@ function ElementRenderer({
   const secondary = resolveColor("secondary", theme, slide)!;
   const fontFamily = resolveFont(el.fontId, theme);
 
+  const clickable = onClick ? { cursor: "pointer" as const } : {};
   const activeOutline = isActive
-    ? { outline: "3px solid #0071e3", outlineOffset: 4, borderRadius: 4 }
-    : {};
+    ? { boxShadow: "inset 0 0 0 3px #0071e3", borderRadius: 4, position: "relative" as const, zIndex: 2, ...clickable }
+    : clickable;
 
   const spacing = {
     marginTop: el.marginTop ?? undefined,
@@ -183,7 +184,7 @@ function ElementRenderer({
     case "text": {
       const textGradientStyle: React.CSSProperties = el.backgroundGradient
         ? {
-            background: el.backgroundGradient,
+            backgroundImage: el.backgroundGradient,
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
             backgroundClip: "text",

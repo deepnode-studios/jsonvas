@@ -443,6 +443,25 @@ const DEFAULT_DOC: JsonvasDocument = {
 
 /* ─── Store ─── */
 
+/* ─── Undo / Redo history ─── */
+
+type DocSnapshot = Pick<JsonvasDocument, "documentSize" | "assets" | "theme" | "content">;
+
+const MAX_HISTORY = 50;
+const undoStack: DocSnapshot[] = [];
+const redoStack: DocSnapshot[] = [];
+
+function takeSnapshot(s: DocSnapshot) {
+  undoStack.push(structuredClone({
+    documentSize: s.documentSize,
+    assets: s.assets,
+    theme: s.theme,
+    content: s.content,
+  }));
+  if (undoStack.length > MAX_HISTORY) undoStack.shift();
+  redoStack.length = 0; // clear redo on new action
+}
+
 interface JsonvasStore extends JsonvasDocument {
   setDocumentSize: (size: DocumentSize) => void;
   updateTheme: (patch: Partial<ThemeNode>) => void;
@@ -486,6 +505,12 @@ interface JsonvasStore extends JsonvasDocument {
   getDocument: () => JsonvasDocument;
   importDocument: (doc: JsonvasDocument) => void;
 
+  // Undo / Redo
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+
   // Selection
   activeSlideId: string | null;
   setActiveSlide: (id: string | null) => void;
@@ -493,7 +518,17 @@ interface JsonvasStore extends JsonvasDocument {
   setActiveElement: (id: string | null) => void;
 }
 
-export const useJsonvasStore = create<JsonvasStore>((set, get) => ({
+export const useJsonvasStore = create<JsonvasStore>((_set, get) => {
+  // Wrap set to auto-snapshot before each mutation
+  let _skipSnapshot = false;
+  const set: typeof _set = (partial, replace?) => {
+    if (!_skipSnapshot) {
+      try { takeSnapshot(get()); } catch { /* never block state updates */ }
+    }
+    (_set as Function)(partial, replace);
+  };
+
+  return {
   ...DEFAULT_DOC,
   activeSlideId: DEFAULT_DOC.content.slides[0]?.id ?? null,
   activeElementId: null,
@@ -741,16 +776,82 @@ export const useJsonvasStore = create<JsonvasStore>((set, get) => ({
     return { documentSize, assets, theme, content };
   },
 
-  importDocument: (doc) =>
-    set({
+  importDocument: (doc) => {
+    // Normalize group elements: LLMs may use "elements" instead of "children"
+    const normalizeElements = (els: SlideElement[]): SlideElement[] =>
+      els.map((el) => {
+        if (el.type === "group") {
+          const raw = el as SlideElement & { elements?: SlideElement[] };
+          const kids = raw.children ?? raw.elements ?? [];
+          delete raw.elements;
+          return { ...el, children: normalizeElements(kids) };
+        }
+        return el;
+      });
+    const content = {
+      slides: doc.content.slides.map((sl) => ({
+        ...sl,
+        elements: normalizeElements(sl.elements),
+      })),
+    };
+    // Skip undo snapshot — importDocument is called on every debounced keystroke
+    // in the JSON editor, which would flood the undo stack with intermediate states.
+    _skipSnapshot = true;
+    _set({
       documentSize: doc.documentSize ?? DOCUMENT_SIZES[0],
       assets: doc.assets,
       theme: { ...DEFAULT_THEME, ...doc.theme, palette: doc.theme.palette ?? [], fonts: doc.theme.fonts ?? DEFAULT_FONTS, backgroundPresets: doc.theme.backgroundPresets ?? [] },
-      content: doc.content,
-      activeSlideId: doc.content.slides[0]?.id ?? null,
+      content,
+      activeSlideId: content.slides[0]?.id ?? null,
       activeElementId: null,
-    }),
+    });
+    _skipSnapshot = false;
+  },
 
-  setActiveSlide: (id) => set({ activeSlideId: id, activeElementId: null }),
-  setActiveElement: (id) => set({ activeElementId: id }),
-}));
+  // ── Undo / Redo ──
+
+  undo: () => {
+    const snapshot = undoStack.pop();
+    if (!snapshot) return;
+    // Save current state to redo
+    redoStack.push(structuredClone({
+      documentSize: get().documentSize,
+      assets: get().assets,
+      theme: get().theme,
+      content: get().content,
+    }));
+    _skipSnapshot = true;
+    _set({
+      ...snapshot,
+      activeSlideId: snapshot.content.slides[0]?.id ?? null,
+      activeElementId: null,
+    });
+    _skipSnapshot = false;
+  },
+
+  redo: () => {
+    const snapshot = redoStack.pop();
+    if (!snapshot) return;
+    // Save current state to undo
+    undoStack.push(structuredClone({
+      documentSize: get().documentSize,
+      assets: get().assets,
+      theme: get().theme,
+      content: get().content,
+    }));
+    _skipSnapshot = true;
+    _set({
+      ...snapshot,
+      activeSlideId: snapshot.content.slides[0]?.id ?? null,
+      activeElementId: null,
+    });
+    _skipSnapshot = false;
+  },
+
+  canUndo: () => undoStack.length > 0,
+  canRedo: () => redoStack.length > 0,
+
+  setActiveSlide: (id) => { _skipSnapshot = true; _set({ activeSlideId: id, activeElementId: null }); _skipSnapshot = false; },
+  setActiveElement: (id) => { _skipSnapshot = true; _set({ activeElementId: id }); _skipSnapshot = false; },
+};
+});

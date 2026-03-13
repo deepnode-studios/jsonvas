@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useJsonvasStore, createElement } from "@/store/useJsonvasStore";
 import type { ElementType, SlideElement, FlexAlign, FlexJustify, FlexDirection, BackgroundPattern } from "@/types/schema";
 import { TemplateGallery } from "./TemplateGallery";
@@ -878,6 +878,20 @@ function ElementListItem({
   );
 }
 
+function ElementEditorSection({ el, slideId }: { el: SlideElement; slideId: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [el.id]);
+  return (
+    <div ref={ref}>
+      <PanelSection title={`Edit: ${el.type}`}>
+        <ElementEditor el={el} slideId={slideId} />
+      </PanelSection>
+    </div>
+  );
+}
+
 export function CarouselBuilder() {
   const slides = useJsonvasStore((s) => s.content.slides);
   const activeSlideId = useJsonvasStore((s) => s.activeSlideId);
@@ -1403,9 +1417,7 @@ export function CarouselBuilder() {
 
       {/* ── Element editor ── */}
       {active && activeEl && (
-        <PanelSection title={`Edit: ${activeEl.type}`}>
-          <ElementEditor el={activeEl} slideId={active.id} />
-        </PanelSection>
+        <ElementEditorSection el={activeEl} slideId={active.id} />
       )}
     </>
   );
